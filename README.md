@@ -2,6 +2,8 @@
 
 LG webOS 智能电视的第三方哔哩哔哩客户端。
 
+> **Fork of [asdf17128/bili-webos](https://github.com/asdf17128/bili-webos)**
+
 ![Platform](https://img.shields.io/badge/platform-LG%20webOS%20TV-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
@@ -14,6 +16,20 @@ LG webOS 智能电视的第三方哔哩哔哩客户端。
 - **搜索** — 虚拟键盘 + 视频搜索
 - **历史记录** — 播放进度上报，续播支持
 - **扫码登录** — 手机 B 站扫码
+
+## 新增功能（相对原版）
+
+- **历史 / 收藏页面** — 侧边栏直接访问历史记录和收藏夹，历史页为默认启动页
+- **3 列视频网格** — 原版 2 列，改为 3 列以充分利用 TV 宽屏
+- **滚轮导航** — 支持 LG Magic Remote 滚轮滚动视频列表，不再依赖光标移动
+- **页面缓存** — 切换页面时不重新请求，返回时瞬间加载
+- **两段式下拉刷新** — 滚轮在顶部再上滑一次显示提示动画，第二次触发刷新
+- **续播记忆** — 退出视频时本地保存播放位置，重新打开自动跳转（比服务端进度更精确）
+- **播放进度角标** — 视频卡片右下角显示 `已看时长 / 总时长`
+- **点赞数显示** — 视频卡片展示点赞数
+- **Akamai CDN 优先** — 自动将备用 CDN 中的 Akamai 节点排到首位，改善中国大陆以外地区的加载速度
+- **侧边栏重构** — 弹幕开关和退出登录移入侧边栏底部，导航项均匀分布
+- **弹幕偏好持久化** — 弹幕开关状态保存到本地，重启后保持
 
 ## 架构
 
@@ -47,7 +63,7 @@ LG webOS 智能电视的第三方哔哩哔哩客户端。
 
 ```bash
 # 1. 克隆仓库
-git clone https://github.com/asdf17128/bili-webos.git
+git clone https://github.com/ZhaoJiaJin/bili-webos.git
 cd bili-webos
 
 # 2. 安装依赖

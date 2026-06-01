@@ -33,6 +33,10 @@ export default React.memo(function VideoCard({ video, focusId, row, col, group, 
   });
 
   const thumbUrl = proxyImg(video.pic || video.cover || '');
+  const bvid = video.bvid || video.bv_id;
+  const localProgress = bvid ? storage.getProgress(bvid) : 0;
+  const progress = Math.max(localProgress, video.progress || 0);
+  const totalSecs = typeof video.duration === 'number' ? video.duration : 0;
 
   return (
     <div {...props} className="video-card">
@@ -40,17 +44,20 @@ export default React.memo(function VideoCard({ video, focusId, row, col, group, 
         {thumbUrl && <img src={thumbUrl} alt="" loading="lazy" decoding="async" />}
         {video.duration != null && (
           <span className="video-card-duration">
-            {typeof video.duration === 'number' ? formatDuration(video.duration) : video.duration}
+            {progress > 0 && totalSecs > 0
+              ? `${formatDuration(progress)} / ${typeof video.duration === 'number' ? formatDuration(video.duration) : video.duration}`
+              : (typeof video.duration === 'number' ? formatDuration(video.duration) : video.duration)
+            }
           </span>
         )}
-        {video.progress > 0 && video.duration > 0 && (
+        {progress > 0 && totalSecs > 0 && (
           <div style={{
             position: 'absolute', bottom: 0, left: 0, right: 0, height: 3,
             background: 'rgba(255,255,255,0.2)',
           }}>
             <div style={{
               height: '100%', background: '#00a1d6',
-              width: `${Math.min(100, (video.progress / video.duration) * 100)}%`,
+              width: `${Math.min(100, (progress / totalSecs) * 100)}%`,
             }} />
           </div>
         )}
@@ -61,6 +68,7 @@ export default React.memo(function VideoCard({ video, focusId, row, col, group, 
           {video.owner?.name && <span>{video.owner.name}</span>}
           {video.stat?.view != null && <span>{formatCount(video.stat.view)}播放</span>}
           {video.play != null && <span>{formatCount(video.play)}播放</span>}
+          {video.stat?.like != null && <span>👍 {formatCount(video.stat.like)}</span>}
           {video.pubdate && <span>{formatTime(video.pubdate)}</span>}
         </div>
       </div>

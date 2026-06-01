@@ -4,7 +4,7 @@ import { Client } from 'ssh2';
 import { readFileSync, readdirSync } from 'fs';
 import { basename } from 'path';
 
-const TV_HOST = '192.168.50.94';
+const TV_HOST = '192.168.1.44';
 const TV_PORT = 9922;
 const TV_USER = 'prisoner';
 const KEY_PATH = process.env.HOME + '/.ssh/tv_webos';

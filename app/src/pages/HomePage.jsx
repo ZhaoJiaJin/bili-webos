@@ -1,10 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { getPopular, getRecommend, getRegionDynamic, getFollowFeed, getLiveList } from '../api/client';
 import VideoGrid from '../components/VideoGrid';
 import { getCurrentFocusId, setFocus, onFocusChange } from '../hooks/useFocus';
 
-const COLS = 2;
+const COLS = 3;
 const FETCH_SIZE = 20;
+
+// Module-level cache: persists across page switches for the session
+const pageCache = new Map();
 
 async function fetchByMode(mode, pn) {
   if (mode === 'hot') {
@@ -36,7 +39,7 @@ async function fetchByMode(mode, pn) {
         bvid: archive.bvid, title: archive.title, pic: archive.cover,
         duration: archive.duration_text, pubdate: archive.pubdate,
         owner: { name: item.modules?.module_author?.name },
-        stat: { view: archive.stat?.play },
+        stat: { view: archive.stat?.play, like: archive.stat?.like },
       };
     }).filter(Boolean);
   } else {
@@ -45,39 +48,17 @@ async function fetchByMode(mode, pn) {
   }
 }
 
-export default function HomePage({ onPlayVideo, refreshKey, mode = 'recommend' }) {
-  const [videos, setVideos] = useState([]);
-  const [loading, setLoading] = useState(true);
+export default function HomePage({ onPlayVideo, mode = 'recommend' }) {
+  const cached = pageCache.get(mode);
+  const [videos, setVideos] = useState(cached || []);
+  const [loading, setLoading] = useState(!cached);
+  const [refreshing, setRefreshing] = useState(false);
+  const [pullReady, setPullReady] = useState(false);
   const [focusRow, setFocusRow] = useState(0);
-  const pageRef = useRef(1);
-  const seenRef = useRef(new Set());
+  const pageRef = useRef(cached ? 2 : 1);
+  const seenRef = useRef(new Set(cached ? cached.map(v => v.bvid || v.bv_id).filter(Boolean) : []));
   const fetchingRef = useRef(false);
-
-  // Load
-  useEffect(() => {
-    let cancelled = false;
-    seenRef.current = new Set();
-    pageRef.current = 1;
-    setLoading(true);
-    setVideos([]);
-    setFocusRow(0);
-
-    fetchByMode(mode, 1).then(items => {
-      if (cancelled) return;
-      setVideos(dedupe(items));
-      setLoading(false);
-      pageRef.current = 2;
-      // Only focus content if not currently in sidebar
-      setTimeout(() => {
-        const cur = getCurrentFocusId();
-        if (!cur || !cur.startsWith('sidebar-')) {
-          setFocus('content-0-0');
-        }
-      }, 50);
-    }).catch(() => { if (!cancelled) setLoading(false); });
-
-    return () => { cancelled = true; };
-  }, [refreshKey, mode]);
+  const refreshingRef = useRef(false);
 
   function dedupe(items) {
     return items.filter(v => {
@@ -88,7 +69,70 @@ export default function HomePage({ onPlayVideo, refreshKey, mode = 'recommend' }
     });
   }
 
-  // Track focus row for transform scroll + load more
+  // Initial load — skipped if cache exists
+  useEffect(() => {
+    if (pageCache.has(mode)) {
+      setTimeout(() => {
+        const cur = getCurrentFocusId();
+        if (!cur || !cur.startsWith('sidebar-')) setFocus('content-0-0');
+      }, 50);
+      return;
+    }
+
+    let cancelled = false;
+    setLoading(true);
+    fetchByMode(mode, 1).then(items => {
+      if (cancelled) return;
+      const deduped = dedupe(items);
+      setVideos(deduped);
+      pageCache.set(mode, deduped);
+      pageRef.current = 2;
+      setLoading(false);
+      setTimeout(() => {
+        const cur = getCurrentFocusId();
+        if (!cur || !cur.startsWith('sidebar-')) setFocus('content-0-0');
+      }, 50);
+    }).catch(() => { if (!cancelled) setLoading(false); });
+
+    return () => { cancelled = true; };
+  }, [mode]);
+
+  // Pull-to-refresh
+  const doRefresh = useCallback(async () => {
+    if (refreshingRef.current) return;
+    refreshingRef.current = true;
+    setRefreshing(true);
+    seenRef.current = new Set();
+    pageRef.current = 1;
+    pageCache.delete(mode);
+    try {
+      const items = await fetchByMode(mode, 1);
+      const deduped = dedupe(items);
+      setVideos(deduped);
+      pageCache.set(mode, deduped);
+      pageRef.current = 2;
+      setFocusRow(0);
+      setFocus('content-0-0');
+    } catch {}
+    setRefreshing(false);
+    refreshingRef.current = false;
+  }, [mode]);
+
+  useEffect(() => {
+    const onReady = () => setPullReady(true);
+    const onCancel = () => setPullReady(false);
+    const onRefresh = () => { setPullReady(false); doRefresh(); };
+    window.addEventListener('pull-ready', onReady);
+    window.addEventListener('pull-cancel', onCancel);
+    window.addEventListener('pull-to-refresh', onRefresh);
+    return () => {
+      window.removeEventListener('pull-ready', onReady);
+      window.removeEventListener('pull-cancel', onCancel);
+      window.removeEventListener('pull-to-refresh', onRefresh);
+    };
+  }, [doRefresh]);
+
+  // Track focus row for GPU scroll + load more
   useEffect(() => {
     return onFocusChange((fid) => {
       if (!fid) return;
@@ -97,13 +141,18 @@ export default function HomePage({ onPlayVideo, refreshKey, mode = 'recommend' }
       const row = parseInt(m[1]);
       setFocusRow(row);
 
-      // Load more when near bottom
       const totalRows = Math.ceil(videos.length / COLS);
       if (row >= totalRows - 2 && !fetchingRef.current) {
         fetchingRef.current = true;
         fetchByMode(mode, pageRef.current).then(items => {
           const unique = dedupe(items);
-          if (unique.length > 0) setVideos(prev => [...prev, ...unique]);
+          if (unique.length > 0) {
+            setVideos(prev => {
+              const next = [...prev, ...unique];
+              pageCache.set(mode, next);
+              return next;
+            });
+          }
           pageRef.current++;
           fetchingRef.current = false;
         }).catch(() => { fetchingRef.current = false; });
@@ -115,14 +164,37 @@ export default function HomePage({ onPlayVideo, refreshKey, mode = 'recommend' }
     return <div className="loading"><div className="loading-spinner" />加载中...</div>;
   }
 
+  const PULL_HEIGHT = 64;
+
   return (
-    <VideoGrid
-      videos={videos}
-      group="content"
-      startRow={0}
-      cols={COLS}
-      onSelect={onPlayVideo}
-      focusRow={focusRow}
-    />
+    <div style={{ position: 'relative', height: '100%', overflow: 'hidden' }}>
+      {(pullReady || refreshing) && (
+        <div style={{
+          position: 'absolute', top: 0, left: 0, right: 0, height: PULL_HEIGHT,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+          color: '#00a1d6', fontSize: 18,
+        }}>
+          {refreshing
+            ? <><div className="loading-spinner" style={{ width: 24, height: 24 }} />正在刷新...</>
+            : <>↑ 再次上滑刷新</>}
+        </div>
+      )}
+
+      {/* Content shifts down to reveal indicator */}
+      <div style={{
+        position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+        transform: `translateY(${pullReady || refreshing ? PULL_HEIGHT : 0}px)`,
+        transition: 'transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
+      }}>
+        <VideoGrid
+          videos={videos}
+          group="content"
+          startRow={0}
+          cols={COLS}
+          onSelect={onPlayVideo}
+          focusRow={focusRow}
+        />
+      </div>
+    </div>
   );
 }
