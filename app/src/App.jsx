@@ -7,22 +7,23 @@ import SidebarItem from './components/SidebarItem';
 import LoginPage from './pages/LoginPage';
 import HomePage from './pages/HomePage';
 import SearchPage from './pages/SearchPage';
-import SettingsPage from './pages/SettingsPage';
+import HistoryPage from './pages/HistoryPage';
+import FavoritesPage from './pages/FavoritesPage';
 import PlayerPage from './player/PlayerPage';
 import LivePlayerPage from './player/LivePlayerPage';
 
 const NAV_ITEMS = [
+  { key: 'history', label: '历史', icon: '🕐' },
   { key: 'recommend', label: '推荐', icon: '🏠' },
   { key: 'hot', label: '热门', icon: '🔥' },
   { key: 'live', label: '直播', icon: '📡' },
   { key: 'partition', label: '分区', icon: '📁' },
   { key: 'follow', label: '关注', icon: '👤' },
-  { key: 'search', label: '搜索', icon: '🔍', dividerBefore: true },
-  { key: 'settings', label: '我的', icon: '⚙️' },
+  { key: 'favorites', label: '收藏', icon: '⭐' },
+  { key: 'search', label: '搜索', icon: '🔍' },
 ];
 
-function Sidebar({ activePage, onPageChange, user }) {
-  // Listen for sidebar focus changes to auto-switch page
+function Sidebar({ activePage, onPageChange, user, danmakuEnabled, onToggleDanmaku, onLogout }) {
   useEffect(() => {
     return onFocusChange((fid) => {
       if (!fid?.startsWith('sidebar-')) return;
@@ -30,11 +31,13 @@ function Sidebar({ activePage, onPageChange, user }) {
       if (!match) return;
       const idx = parseInt(match[1]);
       if (idx < NAV_ITEMS.length) {
-        const item = NAV_ITEMS[idx];
-        onPageChange(item.key);
+        onPageChange(NAV_ITEMS[idx].key);
       }
     });
   }, [onPageChange]);
+
+  const danmakuRow = NAV_ITEMS.length;
+  const logoutRow = NAV_ITEMS.length + 1;
 
   return (
     <div className="sidebar">
@@ -43,10 +46,10 @@ function Sidebar({ activePage, onPageChange, user }) {
         <span>webOS</span>
       </div>
 
-      {NAV_ITEMS.map((item, i) => (
-        <React.Fragment key={item.key}>
-          {item.dividerBefore && <div className="sidebar-divider" />}
+      <div className="sidebar-nav">
+        {NAV_ITEMS.map((item, i) => (
           <SidebarItem
+            key={item.key}
             id={`sidebar-${i}-0`}
             row={i}
             label={item.label}
@@ -54,8 +57,8 @@ function Sidebar({ activePage, onPageChange, user }) {
             active={activePage === item.key}
             onSelect={() => onPageChange(item.key)}
           />
-        </React.Fragment>
-      ))}
+        ))}
+      </div>
 
       <div className="sidebar-user">
         {user ? (
@@ -68,20 +71,38 @@ function Sidebar({ activePage, onPageChange, user }) {
         ) : (
           <div className="sidebar-user-login">未登录</div>
         )}
+        <SidebarItem
+          id={`sidebar-${danmakuRow}-0`}
+          row={danmakuRow}
+          label={danmakuEnabled ? '弹幕开' : '弹幕关'}
+          icon="💬"
+          active={false}
+          onSelect={onToggleDanmaku}
+        />
+        {user && (
+          <SidebarItem
+            id={`sidebar-${logoutRow}-0`}
+            row={logoutRow}
+            label="退出"
+            icon="🚪"
+            active={false}
+            onSelect={onLogout}
+          />
+        )}
       </div>
     </div>
   );
 }
 
 export default function App() {
-  const [page, setPage] = useState('recommend');
+  const [page, setPage] = useState('history');
   const [user, setUser] = useState(null);
   const [loggedIn, setLoggedIn] = useState(false);
   const [playerVideo, setPlayerVideo] = useState(null);
   const [liveRoom, setLiveRoom] = useState(null);
   const [showLogin, setShowLogin] = useState(false);
   const [toast, setToast] = useState('');
-  const [refreshKey, setRefreshKey] = useState(0);
+  const [danmakuEnabled, setDanmakuEnabled] = useState(storage.getSettings().danmaku !== false);
 
   useEffect(() => {
     initKeyboardNav();
@@ -101,8 +122,8 @@ export default function App() {
         setLiveRoom(null);
       } else if (showLogin) {
         setShowLogin(false);
-      } else if (page !== 'recommend') {
-        setPage('recommend');
+      } else if (page !== 'history') {
+        setPage('history');
       } else {
         try { window.webOS?.platformBack?.(); } catch { window.close(); }
       }
@@ -128,7 +149,7 @@ export default function App() {
     setLoggedIn(true);
     loadUserInfo();
     showToastMsg('登录成功');
-    setPage('recommend');
+    setPage('history');
   }, [loadUserInfo]);
 
   const handleLogout = useCallback(() => {
@@ -136,7 +157,15 @@ export default function App() {
     setUser(null);
     setLoggedIn(false);
     showToastMsg('已退出登录');
-    setPage('recommend');
+    setPage('history');
+  }, []);
+
+  const handleToggleDanmaku = useCallback(() => {
+    setDanmakuEnabled(prev => {
+      const next = !prev;
+      storage.setSettings({ ...storage.getSettings(), danmaku: next });
+      return next;
+    });
   }, []);
 
   const handlePlayVideo = useCallback((video) => {
@@ -148,18 +177,13 @@ export default function App() {
     setPlayerVideo(video);
   }, []);
 
-  // Sidebar hover = switch page, click same page = refresh
   const handlePageChange = useCallback((key) => {
-    if ((key === 'follow') && !loggedIn) {
+    if (key === 'follow' && !loggedIn) {
       setShowLogin(true);
       return;
     }
-    if (key === page) {
-      setRefreshKey(n => n + 1);
-    } else {
-      setPage(key);
-    }
-  }, [loggedIn, page]);
+    setPage(key);
+  }, [loggedIn]);
 
   const showToastMsg = useCallback((msg) => {
     setToast(msg);
@@ -169,15 +193,23 @@ export default function App() {
   return (
     <>
       <div className="app-container" style={{ display: (playerVideo || liveRoom) ? 'none' : 'flex' }}>
-        <Sidebar activePage={page} onPageChange={handlePageChange} user={user} />
+        <Sidebar
+          activePage={page}
+          onPageChange={handlePageChange}
+          user={user}
+          danmakuEnabled={danmakuEnabled}
+          onToggleDanmaku={handleToggleDanmaku}
+          onLogout={handleLogout}
+        />
         <div className="main-content">
-          {page === 'recommend' && <HomePage onPlayVideo={handlePlayVideo} refreshKey={refreshKey} mode="recommend" />}
-          {page === 'hot' && <HomePage onPlayVideo={handlePlayVideo} refreshKey={refreshKey} mode="hot" />}
-          {page === 'live' && <HomePage onPlayVideo={handlePlayVideo} refreshKey={refreshKey} mode="live" />}
-          {page === 'partition' && <HomePage onPlayVideo={handlePlayVideo} refreshKey={refreshKey} mode="partition" />}
-          {page === 'follow' && <HomePage onPlayVideo={handlePlayVideo} refreshKey={refreshKey} mode="follow" />}
+          {page === 'history' && <HistoryPage onPlayVideo={handlePlayVideo} />}
+          {page === 'recommend' && <HomePage onPlayVideo={handlePlayVideo} mode="recommend" />}
+          {page === 'hot' && <HomePage onPlayVideo={handlePlayVideo} mode="hot" />}
+          {page === 'live' && <HomePage onPlayVideo={handlePlayVideo} mode="live" />}
+          {page === 'partition' && <HomePage onPlayVideo={handlePlayVideo} mode="partition" />}
+          {page === 'follow' && <HomePage onPlayVideo={handlePlayVideo} mode="follow" />}
+          {page === 'favorites' && <FavoritesPage userMid={user?.mid} onPlayVideo={handlePlayVideo} />}
           {page === 'search' && <SearchPage onPlayVideo={handlePlayVideo} />}
-          {page === 'settings' && <SettingsPage onLogout={handleLogout} user={user} onPlayVideo={handlePlayVideo} />}
         </div>
         {toast && <div className="toast">{toast}</div>}
       </div>

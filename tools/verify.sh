@@ -73,7 +73,7 @@ conn.on('ready', () => {
     });
   });
 });
-conn.connect({host:'192.168.50.94',port:9922,username:'prisoner',
+conn.connect({host:'192.168.1.44',port:9922,username:'prisoner',
   privateKey:readFileSync(process.env.HOME+'/.ssh/tv_webos'),passphrase:'$PASS',
   algorithms:{serverHostKey:['ssh-rsa']}});
 setTimeout(()=>process.exit(0),15000);

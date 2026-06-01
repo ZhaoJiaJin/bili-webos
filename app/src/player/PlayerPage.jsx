@@ -17,9 +17,10 @@ export default function PlayerPage({ video, onBack, onPlayNext }) {
   const [showQuality, setShowQuality] = useState(false);
   const [showRelated, setShowRelated] = useState(false);
   const [danmakus, setDanmakus] = useState([]);
-  const [danmakuEnabled, setDanmakuEnabled] = useState(true);
+  const [danmakuEnabled, setDanmakuEnabled] = useState(storage.getSettings().danmaku !== false);
   const [videoTitle, setVideoTitle] = useState(video?.title || '');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [ended, setEnded] = useState(false);
   const [relatedVideos, setRelatedVideos] = useState([]);
   // Focus: 'none' (no UI) | 'controls' | 'quality' | 'related' | 'endscreen'
@@ -88,8 +89,10 @@ export default function PlayerPage({ video, onBack, onPlayNext }) {
       await player.load(mpdUrl);
       URL.revokeObjectURL(mpdUrl);
 
-      if (video.progress && video.progress > 0 && video.progress < (dash.duration || 9999) - 10) {
-        videoRef.current.currentTime = video.progress;
+      const savedProgress = storage.getProgress(video.bvid);
+      const resumeAt = savedProgress > 0 ? savedProgress : (video.progress || 0);
+      if (resumeAt > 0 && resumeAt < (dash.duration || 9999) - 10) {
+        videoRef.current.currentTime = resumeAt;
       }
 
       videoRef.current.play();
@@ -110,9 +113,17 @@ export default function PlayerPage({ video, onBack, onPlayNext }) {
       } catch {}
     } catch (err) {
       console.error('Load video error:', err);
+      setError('播放失败，请返回重试');
       setLoading(false);
     }
   }, [video]);
+
+  function buildBaseUrls(primary, backups) {
+    const all = [primary, ...(backups || [])].filter(Boolean);
+    const score = u => u.includes('akamaized.net') ? 0 : u.includes('bilivideo') ? 2 : 1;
+    all.sort((a, b) => score(a) - score(b));
+    return all.map((u, i) => `<BaseURL priority="${i + 1}">${escapeXml(u)}</BaseURL>`).join('\n          ');
+  }
 
   function buildMPD(dash) {
     const duration = dash.duration || 0;
@@ -121,8 +132,9 @@ export default function PlayerPage({ video, onBack, onPlayNext }) {
     if (dash.video?.length > 0) {
       const reps = dash.video.map(v => {
         const baseUrl = v.baseUrl || v.base_url || '';
+        const backupUrls = v.backupUrl || v.backup_url || [];
         return `<Representation id="${v.id}" bandwidth="${v.bandwidth || 1000000}" codecs="${v.codecs || 'avc1.640032'}" mimeType="${v.mimeType || 'video/mp4'}" width="${v.width || 1920}" height="${v.height || 1080}" frameRate="${v.frameRate || v.frame_rate || '30'}">
-          <BaseURL>${escapeXml(baseUrl)}</BaseURL>
+          ${buildBaseUrls(baseUrl, backupUrls)}
           <SegmentBase indexRange="${v.SegmentBase?.indexRange || v.segment_base?.index_range || '0-0'}">
             <Initialization range="${v.SegmentBase?.Initialization || v.segment_base?.initialization || '0-0'}" />
           </SegmentBase>
@@ -134,8 +146,9 @@ export default function PlayerPage({ video, onBack, onPlayNext }) {
     if (dash.audio?.length > 0) {
       const reps = dash.audio.map(a => {
         const baseUrl = a.baseUrl || a.base_url || '';
+        const backupUrls = a.backupUrl || a.backup_url || [];
         return `<Representation id="${a.id}" bandwidth="${a.bandwidth || 128000}" codecs="${a.codecs || 'mp4a.40.2'}" mimeType="${a.mimeType || 'audio/mp4'}">
-          <BaseURL>${escapeXml(baseUrl)}</BaseURL>
+          ${buildBaseUrls(baseUrl, backupUrls)}
           <SegmentBase indexRange="${a.SegmentBase?.indexRange || a.segment_base?.index_range || '0-0'}">
             <Initialization range="${a.SegmentBase?.Initialization || a.segment_base?.initialization || '0-0'}" />
           </SegmentBase>
@@ -165,11 +178,14 @@ export default function PlayerPage({ video, onBack, onPlayNext }) {
     return () => clearInterval(timeUpdateRef.current);
   }, []);
 
-  // Heartbeat
+  // Heartbeat + local progress save
   useEffect(() => {
     const hb = setInterval(() => {
-      if (videoRef.current && video?.bvid && cidRef.current && !videoRef.current.paused) {
-        reportHeartbeat(video.bvid, cidRef.current, videoRef.current.currentTime, (Date.now() - startTimeRef.current) / 1000);
+      if (videoRef.current && video?.bvid && cidRef.current) {
+        storage.saveProgress(video.bvid, videoRef.current.currentTime);
+        if (!videoRef.current.paused) {
+          reportHeartbeat(video.bvid, cidRef.current, videoRef.current.currentTime, (Date.now() - startTimeRef.current) / 1000);
+        }
       }
     }, 15000);
     return () => clearInterval(hb);
@@ -267,7 +283,10 @@ export default function PlayerPage({ video, onBack, onPlayNext }) {
           setFocusArea('none');
           if (controlsTimer.current) clearTimeout(controlsTimer.current);
         } else {
-          // Nothing visible: exit player
+          // Nothing visible: exit player — save position first
+          if (video?.bvid && videoRef.current) {
+            storage.saveProgress(video.bvid, videoRef.current.currentTime);
+          }
           onBack();
         }
         return true;
@@ -341,7 +360,11 @@ export default function PlayerPage({ video, onBack, onPlayNext }) {
             if (videoRef.current.paused) { videoRef.current.play(); setPlaying(true); }
             else { videoRef.current.pause(); setPlaying(false); }
           } else if (btn === 'danmaku') {
-            setDanmakuEnabled(prev => !prev);
+            setDanmakuEnabled(prev => {
+              const next = !prev;
+              storage.setSettings({ ...storage.getSettings(), danmaku: next });
+              return next;
+            });
           } else if (btn === 'quality') {
             setShowQuality(true);
             setFocusArea('quality');
@@ -468,6 +491,15 @@ export default function PlayerPage({ video, onBack, onPlayNext }) {
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           background: 'rgba(0,0,0,0.8)', zIndex: 50 }}>
           <div className="loading"><div className="loading-spinner" />加载中...</div>
+        </div>
+      )}
+
+      {error && (
+        <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(0,0,0,0.9)', zIndex: 50 }}>
+          <div style={{ fontSize: 28, color: '#ff6b6b', marginBottom: 16 }}>⚠ {error}</div>
+          <div style={{ fontSize: 20, color: '#888' }}>按返回键退出</div>
         </div>
       )}
 

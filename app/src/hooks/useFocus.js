@@ -101,11 +101,58 @@ function findInGroup(group, preferRow) {
 
 // Keyboard handler
 let keyHandler = null;
+let wheelHandler = null;
 let customKeyHandler = null;
 export function setCustomKeyHandler(handler) { customKeyHandler = handler; }
 
 export function initKeyboardNav() {
   if (keyHandler) return;
+
+  let lastWheelTime = 0;
+  let pullReady = false;
+  wheelHandler = (e) => {
+    if (customKeyHandler) return;
+    const now = Date.now();
+    if (now - lastWheelTime < 150) return;
+    lastWheelTime = now;
+    let focusId = currentFocusId;
+    let from = focusRegistry.get(focusId);
+    if (!from || from.group === 'sidebar') {
+      const contentItem = findInGroup('content', 0);
+      if (!contentItem) return;
+      setFocus(contentItem);
+      focusId = contentItem;
+      from = focusRegistry.get(focusId);
+      if (!from) return;
+    }
+    const dir = e.deltaY > 0 ? 'down' : 'up';
+
+    // Scrolling down cancels pull-ready state
+    if (pullReady && dir === 'down') {
+      pullReady = false;
+      window.dispatchEvent(new CustomEvent('pull-cancel'));
+    }
+
+    const targetRow = dir === 'down' ? from.row + 1 : from.row - 1;
+    let next = null;
+    for (let c = from.col; c >= 0; c--) {
+      const id = `${from.group}-${targetRow}-${c}`;
+      if (focusRegistry.has(id)) { next = id; break; }
+    }
+    if (next) {
+      setFocus(next);
+    } else if (dir === 'up' && from.row === 0) {
+      if (!pullReady) {
+        pullReady = true;
+        window.dispatchEvent(new CustomEvent('pull-ready'));
+      } else {
+        pullReady = false;
+        window.dispatchEvent(new CustomEvent('pull-to-refresh'));
+      }
+    }
+  };
+  window.addEventListener('wheel', wheelHandler, { passive: true });
+
   keyHandler = (e) => {
     if (customKeyHandler && customKeyHandler(e)) return;
     const key = e.key;
@@ -172,16 +219,11 @@ export function useFocusable({ id, row = 0, col = 0, group = 'content', onSelect
     onSelectRef.current?.();
   }, [id]);
 
-  const handleMouseEnter = useCallback(() => {
-    setFocus(id);
-  }, [id]);
-
   return {
     isFocused: currentFocusId === id, // Only accurate at render time, not reactive
     props: {
       'data-focus-id': id,
       onClick: handleClick,
-      onMouseEnter: handleMouseEnter,
       style: { cursor: 'pointer' },
     }
   };

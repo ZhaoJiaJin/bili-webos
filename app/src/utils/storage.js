@@ -51,5 +51,17 @@ export const storage = {
 
   setSettings(settings) {
     this.set('settings', settings);
-  }
+  },
+
+  saveProgress(bvid, time) {
+    if (!bvid || time < 5) return;
+    const all = this.get('progress') || {};
+    all[bvid] = Math.floor(time);
+    this.set('progress', all);
+  },
+
+  getProgress(bvid) {
+    if (!bvid) return 0;
+    return (this.get('progress') || {})[bvid] || 0;
+  },
 };
