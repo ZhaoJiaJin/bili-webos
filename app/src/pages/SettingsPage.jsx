@@ -21,6 +21,7 @@ export default function SettingsPage({ onLogout, user, onPlayVideo }) {
           title: item.title, pic: item.cover, duration: item.duration,
           progress: item.progress, owner: { name: item.author_name },
           stat: { view: item.view, like: item.like },
+          rights: item.rights,
         })));
       }
     } catch {}
