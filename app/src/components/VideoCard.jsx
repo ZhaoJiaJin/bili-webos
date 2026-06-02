@@ -37,11 +37,23 @@ export default React.memo(function VideoCard({ video, focusId, row, col, group, 
   const localProgress = bvid ? storage.getProgress(bvid) : 0;
   const progress = Math.max(localProgress, video.progress || 0);
   const totalSecs = typeof video.duration === 'number' ? video.duration : 0;
+  const rights = video.rights || {};
+  const payBadge = rights.ugc_pay ? '付费' : rights.pay ? '付费' : rights.vip_only ? '大会员' : null;
 
   return (
     <div {...props} className="video-card">
       <div className="video-card-thumb">
         {thumbUrl && <img src={thumbUrl} alt="" loading="lazy" decoding="async" />}
+        {payBadge && (
+          <span style={{
+            position: 'absolute', top: 6, left: 8,
+            background: payBadge === '大会员' ? '#fb7299' : '#f4a12a',
+            color: '#fff', fontSize: 13, padding: '2px 8px', borderRadius: 4,
+            fontWeight: 600,
+          }}>
+            {payBadge}
+          </span>
+        )}
         {video.duration != null && (
           <span className="video-card-duration">
             {progress > 0 && totalSecs > 0

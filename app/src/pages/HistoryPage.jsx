@@ -23,6 +23,7 @@ export default function HistoryPage({ onPlayVideo }) {
           progress: item.progress,
           owner: { name: item.author_name },
           stat: { view: item.view, like: item.like },
+          rights: item.rights,
         }));
         setVideos(items);
         if (!isRefresh) setError('');

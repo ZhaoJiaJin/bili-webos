@@ -40,6 +40,7 @@ async function fetchByMode(mode, pn) {
         duration: archive.duration_text, pubdate: archive.pubdate,
         owner: { name: item.modules?.module_author?.name },
         stat: { view: archive.stat?.play, like: archive.stat?.like },
+        rights: archive.rights,
       };
     }).filter(Boolean);
   } else {

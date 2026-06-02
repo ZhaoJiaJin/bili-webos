@@ -20,6 +20,7 @@ export default function FavoritesPage({ userMid, onPlayVideo }) {
           setVideos((favRes?.data?.medias || []).map(m => ({
             bvid: m.bvid, title: m.title, pic: m.cover, duration: m.duration,
             owner: { name: m.upper?.name }, stat: { view: m.cnt_info?.play, like: m.cnt_info?.thumb_up },
+            rights: m.rights,
           })));
         }
       } catch (err) { console.error('Fav error:', err); }
