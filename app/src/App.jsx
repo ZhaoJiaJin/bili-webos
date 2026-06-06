@@ -13,8 +13,8 @@ import PlayerPage from './player/PlayerPage';
 import LivePlayerPage from './player/LivePlayerPage';
 
 const NAV_ITEMS = [
-  { key: 'history', label: '历史', icon: '🕐' },
   { key: 'recommend', label: '推荐', icon: '🏠' },
+  { key: 'history', label: '历史', icon: '🕐' },
   { key: 'hot', label: '热门', icon: '🔥' },
   { key: 'live', label: '直播', icon: '📡' },
   { key: 'partition', label: '分区', icon: '📁' },
