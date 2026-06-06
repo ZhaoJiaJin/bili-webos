@@ -458,10 +458,30 @@ export default function PlayerPage({ video, onBack, onPlayNext }) {
         return false;
       }
 
-      // === End screen ===
+      // === End screen (grid) ===
       if (focusArea === 'endscreen') {
-        if (e.key === 'ArrowLeft') { e.preventDefault(); setFocusIdx(prev => Math.max(0, prev - 1)); return true; }
-        if (e.key === 'ArrowRight') { e.preventDefault(); setFocusIdx(prev => Math.min(relatedVideos.length - 1, prev + 1)); return true; }
+        const RCOLS = 4;
+        if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          if (focusIdx % RCOLS > 0) setFocusIdx(prev => prev - 1);
+          return true;
+        }
+        if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          if (focusIdx % RCOLS < RCOLS - 1 && focusIdx < relatedVideos.length - 1) setFocusIdx(prev => prev + 1);
+          return true;
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          if (focusIdx >= RCOLS) setFocusIdx(prev => prev - RCOLS);
+          return true;
+        }
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          const nextIdx = focusIdx + RCOLS;
+          if (nextIdx < relatedVideos.length) setFocusIdx(nextIdx);
+          return true;
+        }
         if (e.key === 'Enter') {
           e.preventDefault();
           const rv = relatedVideos[focusIdx];
@@ -474,8 +494,28 @@ export default function PlayerPage({ video, onBack, onPlayNext }) {
       return false;
     };
 
+    // Wheel handler for endscreen grid scrolling
+    let lastEndscreenWheel = 0;
+    const onEndscreenWheel = (e) => {
+      if (focusArea !== 'endscreen' || !ended) return;
+      const now = Date.now();
+      if (now - lastEndscreenWheel < 150) return;
+      lastEndscreenWheel = now;
+      const RCOLS = 4;
+      if (e.deltaY > 0) {
+        const nextIdx = focusIdx + RCOLS;
+        if (nextIdx < relatedVideos.length) setFocusIdx(nextIdx);
+      } else {
+        if (focusIdx >= RCOLS) setFocusIdx(focusIdx - RCOLS);
+      }
+    };
+    window.addEventListener('wheel', onEndscreenWheel, { passive: true });
+
     setCustomKeyHandler(handler);
-    return () => setCustomKeyHandler(null);
+    return () => {
+      setCustomKeyHandler(null);
+      window.removeEventListener('wheel', onEndscreenWheel);
+    };
   }, [focusArea, focusIdx, qualities, showControls, showQuality, showRelated, ended, relatedVideos, onBack, onPlayNext, openControls, hideControlsLater, changeQuality]);
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
@@ -563,7 +603,7 @@ export default function PlayerPage({ video, onBack, onPlayNext }) {
         </div>
       )}
 
-      {/* End screen */}
+      {/* End screen (grid) */}
       {ended && relatedVideos.length > 0 && (
         <div style={{
           position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
@@ -572,20 +612,23 @@ export default function PlayerPage({ video, onBack, onPlayNext }) {
         }}>
           <div style={{ fontSize: 28, color: '#fff', marginBottom: 30 }}>播放结束</div>
           <div style={{ fontSize: 20, color: '#aaa', marginBottom: 20 }}>接下来播放</div>
-          <div style={{ display: 'flex', gap: 20 }}>
+          <div style={{
+            display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 20,
+            width: '75%', maxWidth: 1400,
+          }}>
             {relatedVideos.map((rv, i) => {
               const thumb = (rv.pic || '').startsWith('//') ? 'https:' + rv.pic : rv.pic;
               return (
                 <div key={rv.bvid || i} onClick={() => onPlayNext?.(rv)}
                   style={{
-                    width: 280, cursor: 'pointer',
+                    cursor: 'pointer',
                     outline: focusArea === 'endscreen' && focusIdx === i ? '4px solid #00a1d6' : 'none',
                     borderRadius: 8, overflow: 'hidden',
                   }}>
                   <div style={{ width: '100%', aspectRatio: '16/9', background: '#1a1a2e', borderRadius: 8, overflow: 'hidden' }}>
                     {thumb && <img src={thumb} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
                   </div>
-                  <div style={{ padding: '8px 4px', fontSize: 14, color: '#ccc', lineHeight: 1.3,
+                  <div style={{ padding: '8px 4px', fontSize: 18, color: '#ccc', lineHeight: 1.3,
                     overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
                     {rv.title}
                   </div>
