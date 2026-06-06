@@ -13,8 +13,8 @@ import PlayerPage from './player/PlayerPage';
 import LivePlayerPage from './player/LivePlayerPage';
 
 const NAV_ITEMS = [
-  { key: 'history', label: '历史', icon: '🕐' },
   { key: 'recommend', label: '推荐', icon: '🏠' },
+  { key: 'history', label: '历史', icon: '🕐' },
   { key: 'hot', label: '热门', icon: '🔥' },
   { key: 'live', label: '直播', icon: '📡' },
   { key: 'partition', label: '分区', icon: '📁' },
@@ -95,7 +95,7 @@ function Sidebar({ activePage, onPageChange, user, danmakuEnabled, onToggleDanma
 }
 
 export default function App() {
-  const [page, setPage] = useState('history');
+  const [page, setPage] = useState('recommend');
   const [user, setUser] = useState(null);
   const [loggedIn, setLoggedIn] = useState(false);
   const [playerVideo, setPlayerVideo] = useState(null);
