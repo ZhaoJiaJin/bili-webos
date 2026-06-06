@@ -95,7 +95,7 @@ function Sidebar({ activePage, onPageChange, user, danmakuEnabled, onToggleDanma
 }
 
 export default function App() {
-  const [page, setPage] = useState('history');
+  const [page, setPage] = useState('recommend');
   const [user, setUser] = useState(null);
   const [loggedIn, setLoggedIn] = useState(false);
   const [playerVideo, setPlayerVideo] = useState(null);
